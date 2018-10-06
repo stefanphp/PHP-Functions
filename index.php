@@ -1,49 +1,55 @@
-<?php 
+<?php
 
-function index($path,$dept=1,$log=0){
+function index($path,$depth=1,$log=0){
+	$finfo = finfo_open(FILEINFO_MIME_TYPE);
 	if ($log === 1) $f = fopen('files.txt','w');
-	$size=$dir=$file=0;
-	echo("Scaning dir $dir, depth -> $dept");
+	$size=$all=$dir=$file=0;
+	$db = new PDO("mysql:host=localhost;dbname=data","root","root");
+	$arr = array();
+
+	echo("[RUNNING] Scaning dir $path, depth -> $depth");
 	
-	$fl = new RecursiveIteratorIterator(
-		new RecursiveDirectoryIterator($path),
-			RecursiveIteratorIterator::SELF_FIRST,
-			RecursiveIteratorIterator::CATCH_GET_CHILD
-	);
-	$fl->setMaxDepth($dept);
+	$dir = new RecursiveDirectoryIterator($path,
+	RecursiveDirectoryIterator::SKIP_DOTS);
+
+	$it = new RecursiveIteratorIterator($dir,
+	RecursiveIteratorIterator::SELF_FIRST,
+	RecursiveIteratorIterator::CATCH_GET_CHILD);
+	$it->setMaxDepth($depth);
 
 	echo "\n[RUNNING] Indexing files";
-
-	foreach ($fl as $name) {
-		$tmp = $name->getRealPath();
-		if(substr($tmp,3,4) !== 'Boot'
-		&& substr($tmp,3,7) !== 'Windows'
-		&& substr($tmp,3,1) !== '$'
-		&& (substr(mime_content_type($tmp),0,5) === 'image'
-		||	substr(mime_content_type($tmp),0,5) === 'video'
-		||	substr(mime_content_type($tmp),0,5) === 'audio'
-		||	substr(mime_content_type($tmp),0,4) === 'text')){
-			if(is_dir($tmp)) $dir++;
-			if(is_file($tmp)){
-				$size += filesize($tmp);
-				if ($log === 1) fwrite($f,$tmp.PHP_EOL);
+	
+	foreach ($it as $name) {
+		if($name->isDir()) $dir++;
+		if($name->isFile()){
+			$size += filesize($name);
+			if ($log === 1) fwrite($f,$name.PHP_EOL);
 				$file++;
+				$hash = md5_file($name);
+				$res = $db->prepare("select hash from data where hash='$hash'");
+				$res->execute();
+				$res = $res->fetch(PDO::FETCH_ASSOC);
+			if(strlen($res['hash']) === 0){
+				$size = filesize($name);
+				$type = (finfo_file($finfo,$name));
+				$clk = time();
+				$stmt = $db->prepare("insert into data (id,name,clk,type,size,hash) 
+				values(id,'$name','$clk','$type','$size','$hash')");
+				$stmt->execute();
 			}
 		}
 	}
+	
+	finfo_close($finfo);
 	if ($log === 1) fclose($f);
 	
-	$size = round($size/1048576,2);
+	$size = round($size/1048576);
+	echo "Files: $file -> $size MB\n";
+	echo "Dir: $dir\n";
+	echo "All: $all\n";
+	$type=$hash=$stmt=$db=$size=$name=null;
+}	
 
-	echo "\n[INFO]Folders: $dir\n";
-	echo "[INFO]Files: $file\n";
-	echo "[INFO]Size: $size MB\n";
-	
-	$fl=$arr=$size=$name=0;
-}
-
-echo mime_content_type('script.js');
-
-#index("D:\\",1);
+//index('D:\\',2,0);
 
 ?>
