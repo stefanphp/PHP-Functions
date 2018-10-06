@@ -1,32 +1,37 @@
-                        # WIP
-
 <?php
 
-function chunk($file,$key,$chunk=1024){
-    $m = memory_get_peak_usage(true) / (1024 * 1024);
-    $name = substr($file,3);
-    $i = 0;
-    $f = fopen($file,'r');
-    $f2 = fopen($name,'w');
-    #$arr = array();
+function find($file,$key,$depth)
+{
+	$start = microtime(1);
+	$chunk = 128;
+	$f = fopen($file,'r');
+	$i = 0;
+	$n = 0;
+	$temp='';
+	$pos = 0;
 
-    while(!feof($f) && $i<1){
-        $buff = fread($f,$chunk);
-        fwrite($f2,$buff);
-        $arr = explode(PHP_EOL,$buff);
-        $i++;
-    }
-    
-    echo "\n[INFO] Memory used -> $m MB";
-    echo "\n[INFO] Buffer ->  $chunk\n";
-    
-    fclose($f);
-    fclose($f2);
-   
+	while(!feof($f) && $i<=$depth){
+		$buff = fread($f,$chunk);
+		$len = strlen($buff);
+		for($l=0;$l<$len;$l++){
+			if($buff[$l] !== "\n"){
+				$temp .= $buff[$l];
+			}
+			else {
+				f($temp === $key) $pos = $n;
+				$temp = '';
+				$n++;
+			}
+		}
+		$i++;
+	}
+
+	$mem = round(memory_get_peak_usage()/(1024*1024),2);
+	fclose($f);
+	
+	echo "\n\n\n[INFO] Buffer has $n lines\n";
+	echo "Your word '$key' is at line $pos of this huge ass file\n";
+	echo "Memmory used: $mem MB\n$n";
+	echo "\n\n[INFO] Time: ";
+	echo microtime(1) - $start;
 }
-
-chunk('D:\2bil.txt','bibba',50);
-
-#echo file('2bil.txt')[5];
-
-?>
