@@ -18,7 +18,7 @@ function find($file,$key,$depth)
 				$temp .= $buff[$l];
 			}
 			else {
-				f($temp === $key) $pos = $n;
+				if($temp === $key) $pos = $n;
 				$temp = '';
 				$n++;
 			}
