@@ -81,7 +81,7 @@ Class Database
         return $it;
     }
 
-    public function insert(&$data, &$stm)
+    public function insert(&$data, &$stm) # WIP
     {
         $this->db->conn->beginTransaction();
         $stm->bindParam(1, $data[0], PDO::PARAM_STR);
