@@ -36,6 +36,12 @@ Class Database
         else $this->hasError = 1;
     }
 
+    public function commit()
+    {
+        $this->conn->commit();
+        return 1;
+    }
+
     public function query($stm)
     {
         if($stm = $this->conn->prepare($stm))
@@ -81,20 +87,48 @@ Class Database
         return $it;
     }
 
-    public function insert(&$data, &$stm) # WIP
+    public function insertA(&$data, &$stm, $commit = 0)
     {
-        $this->db->conn->beginTransaction();
-        $stm->bindParam(1, $data[0], PDO::PARAM_STR);
-        $stm->bindParam(2, $data[1], PDO::PARAM_INT);
-        $stm->bindParam(3, $data[2], PDO::PARAM_LOB);
-        $stm->bindParam(4, $data[3], PDO::PARAM_LOB);
-        $stm->bindParam(5, $data[4], PDO::PARAM_STR);
-        $stm->bindParam(6, $data[5], PDO::PARAM_STR);
-
+        if(!is_array($data))
+        {
+            $this->err = "Data parameter invalid.";
+            $this->hasError = 1;
+            return 0;
+        }
+        $sz = sizeof($data);
+        $this->conn->beginTransaction();
+        for($i=0;$i<$sz;$i++)
+            $stm->bindParam($i, $data[$i]);
         $stm->execute();
-        $this->db->conn->commit();
-
-        fclose($data[2]);
+        if($commit)
+            $this->conn->commit();
     }
-
+                    # WIP 
+    public function custom_aio($path='', &$stm) 
+    {
+        $data = $this->index($path);
+        $this->conn->beginTransaction();
+        foreach($data as $f)
+        {
+            if($f->isFile() && $f->isReadable())
+            {
+                $file = [
+                    $f->getBasename(),
+                    $f->getSize(),
+                    $this->getThumb($f->getPathname(), 250, 250),
+                    $f->getExtension(), md5_file($f)
+                ];
+                $fd = fopen($f->getPathName(), 'rb');
+                $stm->bindParam(1, $file[0], PDO::PARAM_STR);
+                $stm->bindParam(2, $file[1], PDO::PARAM_INT);
+                $stm->bindParam(3, $fd, PDO::PARAM_LOB);
+                $stm->bindParam(4, $file[2], PDO::PARAM_LOB);
+                $stm->bindParam(5, $file[3], PDO::PARAM_STR);
+                $stm->bindParam(6, $file[4], PDO::PARAM_STR);
+                $stm->execute();
+                fclose($fd);
+            }
+        }
+        $this->commit();
+    }
 }
