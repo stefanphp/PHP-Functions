@@ -1,7 +1,7 @@
 <?php
-
+define('szMax', 1024*1000*50);
 Class Database
-{
+{    
     public $conn = null;
     public $isConnected = 0;
     public $hasError = 0;
@@ -35,13 +35,11 @@ Class Database
         }
         else $this->hasError = 1;
     }
-
     public function commit()
     {
         $this->conn->commit();
         return 1;
     }
-
     public function query($stm)
     {
         if($stm = $this->conn->prepare($stm))
@@ -54,7 +52,6 @@ Class Database
         $this->err = $this->conn->errorInfo();
         $this->hasError = 1;
     }
-
     public function close()
     {
         $this->conn = null;
@@ -71,22 +68,18 @@ Class Database
                 ob_start();
                 imagejpeg($gd, null, $q);
                 $data = ob_get_clean();                
-
                 return $data;
             }
             return 0xaa;
         return 1;
     }
-
     public function index($path, $depth = -1)
     {
         $dir = new RecursiveDirectoryIterator($path, 4096);
         $it = new RecursiveIteratorIterator($dir, 1, 16);
         $it->setMaxDepth($depth);
-
         return $it;
     }
-
     public function insertA(&$data, &$stm, $commit = 0)
     {
         if(!is_array($data))
@@ -104,29 +97,35 @@ Class Database
             $this->conn->commit();
     }
                     # WIP 
-    public function custom_aio($path='', &$stm) 
+    public function custom_aio($path = '', $verbose = 0) 
     {
+        //$filesDB = [];
+        //$files = [];
         $data = $this->index($path);
+        $stm = "insert into files(name, size, data, thumb, type, hash) values(?, ?, ?, ?, ?, ?)";
+        $stm = $this->conn->prepare($stm);
         $this->conn->beginTransaction();
         foreach($data as $f)
         {
-            if($f->isFile() && $f->isReadable())
+            if($f->isFile() && $f->isReadable() && $f->getSize() <= szMax && $f->getExtension() === 'jpg')
             {
+                $fd = fopen($f, 'rb');
                 $file = [
                     $f->getBasename(),
                     $f->getSize(),
-                    $this->getThumb($f->getPathname(), 250, 250),
+                    $fd,
+                    $this->getThumb($f->getPathname(), 300, 185),
                     $f->getExtension(), md5_file($f)
                 ];
-                $fd = fopen($f->getPathName(), 'rb');
                 $stm->bindParam(1, $file[0], PDO::PARAM_STR);
                 $stm->bindParam(2, $file[1], PDO::PARAM_INT);
-                $stm->bindParam(3, $fd, PDO::PARAM_LOB);
-                $stm->bindParam(4, $file[2], PDO::PARAM_LOB);
-                $stm->bindParam(5, $file[3], PDO::PARAM_STR);
-                $stm->bindParam(6, $file[4], PDO::PARAM_STR);
+                $stm->bindParam(3, $file[2], PDO::PARAM_LOB);
+                $stm->bindParam(4, $file[3], PDO::PARAM_LOB);
+                $stm->bindParam(5, $file[4], PDO::PARAM_STR);
+                $stm->bindParam(6, $file[5], PDO::PARAM_STR);
                 $stm->execute();
                 fclose($fd);
+                if($verbose) echo "{$file[0]}\n";
             }
         }
         $this->commit();
