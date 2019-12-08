@@ -99,8 +99,9 @@ Class Database
                     # WIP 
     public function custom_aio($path = '', $verbose = 0) 
     {
-        //$filesDB = [];
-        //$files = [];
+        //$filesDB, $files = [];        
+        $w = 250;
+        $h = -1;
         $data = $this->index($path);
         $stm = "insert into files(name, size, data, thumb, type, hash) values(?, ?, ?, ?, ?, ?)";
         $stm = $this->conn->prepare($stm);
@@ -114,7 +115,7 @@ Class Database
                     $f->getBasename(),
                     $f->getSize(),
                     $fd,
-                    $this->getThumb($f->getPathname(), 300, 185),
+                    $this->getThumb($f->getPathname(), $w, $h),
                     $f->getExtension(), md5_file($f)
                 ];
                 $stm->bindParam(1, $file[0], PDO::PARAM_STR);
