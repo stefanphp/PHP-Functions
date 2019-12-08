@@ -19,7 +19,7 @@ function get($db, $stm)
 if(isset($imgid) && !(isset($start) && isset($offset)))
 {    
     $stm = "select data from files where _rowid_ = $imgid";
-    echo base64_encode(get($db, $stm)['thumb']);
+    echo base64_encode(get($db, $stm)['data']);
 }
 
 if(isset($start) && isset($offset) && !isset($imgid))
