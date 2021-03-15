@@ -14,15 +14,15 @@ function indexFiles($dir, $depth = -1)
 $t1 = time()-$t;
 echo "[1/5] Indexing files. [{$t1}s]\n";
 
-function insertToDB(&$it){
+function insertToDB(&$it, $db_path){
     $t = time();
-    $db = new PDO('sqlite:F:\mamaBaza.db');
+    $db = new PDO("sqlite:$db_path");
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $f_total = $f_ok = $f_err = 0;
     $files = [];
     
-    $stm = $db->prepare("insert into stvari(hash,name,size,ext,timestamp) values(:a,:b,:c,:d,:e)");
-    $res = $db->query('select hash from stvari')->fetchAll(PDO::FETCH_NUM);
+    $stm = $db->prepare("insert into meta(hash,name,size,ext,timestamp) values(:a,:b,:c,:d,:e)");
+    $res = $db->query('select hash from meta')->fetchAll(PDO::FETCH_NUM);
     $res = array_column($res, 0);
 
     $t1 = time()-$t;
@@ -74,5 +74,5 @@ function insertToDB(&$it){
     echo "\nFiles added: $f_ok.\nFiles error: $f_err.\nFiles total: $f_total.\n";
 }
 
-$f = indexFiles("F:\STVARI\Mama\Sve metode");
+$f = indexFiles("X:\Path_to_folder", "X:\Path_to_DB\DB_file.db");
 insertToDB($f);
