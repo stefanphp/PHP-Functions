@@ -17,7 +17,7 @@ echo "[1/5] Indexing files. [{$t1}s]\n";
 function insertToDB(&$it, $db_path){
     $t = time();
     $db = new PDO("sqlite:$db_path");
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_SILENT);
     $f_total = $f_ok = $f_err = 0;
     $files = [];
     
@@ -77,5 +77,5 @@ function insertToDB(&$it, $db_path){
     echo "\nFiles added: $f_ok.\nFiles error: $f_err.\nFiles total: $f_total.\n";
 }
 
-$f = indexFiles("D:\Psy-FI");
-insertToDB($f, 'stvari.db');
+#$f = indexFiles("D:\Psy-FI");
+#insertToDB($f, 'stvari.db');
