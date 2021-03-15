@@ -17,7 +17,7 @@ echo "[1/5] Indexing files. [{$t1}s]\n";
 function insertToDB(&$it, $db_path){
     $t = time();
     $db = new PDO("sqlite:$db_path");
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
     $f_total = $f_ok = $f_err = 0;
     $files = [];
     
@@ -26,11 +26,12 @@ function insertToDB(&$it, $db_path){
     $res = array_column($res, 0);
 
     $t1 = time()-$t;
+    $t = time();
     echo "[2/5] Pulling hashes from DB. [{$t1}s]\n";
 
     foreach($it as $file){
         if($file->isFile() && $file->isReadable())
-        {               
+        {          
             $hash = md5_file($file);
             $name = $file->getBasename();
             $size = $file->getSize();
@@ -41,6 +42,7 @@ function insertToDB(&$it, $db_path){
     }
 
     $t1 = time()-$t;
+    $t = time();
     echo "[3/5] Preparing local files. [{$t1}s]\n";
 
     foreach($files as $k=>&$v)
@@ -49,23 +51,24 @@ function insertToDB(&$it, $db_path){
                     unset($files[$k]);
 
     $t1 = time()-$t;
+    $time = time();
     echo "[4/5] Removing duplicate files. [{$t1}s]\n";
 
-    foreach($files as &$file)
+    foreach($files as $file)
     {
-        $stm->bindParam(':a', $hash, PDO::PARAM_STR);
-        $stm->bindParam(':b', $name, PDO::PARAM_STR);
-        $stm->bindParam(':c', $size, PDO::PARAM_INT);
-        $stm->bindParam(':d', $ext,  PDO::PARAM_STR);
-        $stm->bindParam(':e', $time, PDO::PARAM_INT);
+        $stm->bindParam(':a', $file[0], PDO::PARAM_STR);
+        $stm->bindParam(':b', $file[1], PDO::PARAM_STR);
+        $stm->bindParam(':c', $file[2], PDO::PARAM_INT);
+        $stm->bindParam(':d', $file[3], PDO::PARAM_STR);
+        $stm->bindParam(':e', $file[4], PDO::PARAM_INT);
             
         if($stm->execute()){
             $f_ok++;
-            echo '[OK] ', $name, ' [', $size, " bytes]\n";
+            echo '[OK] ', $file[1], ' [', $file[2], " bytes]\n";
         }
         else{
             $f_err++;
-            echo '[ERR] ', $size, "\n";
+            echo '[ERR] ', $file[1], "\n";
         }
         $f_total++;
     }
@@ -74,5 +77,5 @@ function insertToDB(&$it, $db_path){
     echo "\nFiles added: $f_ok.\nFiles error: $f_err.\nFiles total: $f_total.\n";
 }
 
-$f = indexFiles("X:\Path_to_folder", "X:\Path_to_DB\DB_file.db");
-insertToDB($f);
+$f = indexFiles("D:\Psy-FI");
+insertToDB($f, 'stvari.db');
