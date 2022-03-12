@@ -1,7 +1,11 @@
 <?php
 
+
+$IP_G = $argv[1];
+$PORT_G = $argv[2];
+
 //Unmask incoming framed message
-function ws_unmask($text) {
+function ws_unmask(string $text) {
 	$length = ord($text[1]) & 127;
 	if($length === 126) {
 		$masks = substr($text, 4, 4);
@@ -23,9 +27,9 @@ function ws_unmask($text) {
 }
 
 //Encode message for transfer to client.
-function ws_mask($text)
+function ws_mask(string $text)
 {
-	$b1 = 0x80 | (0x1 & 0x0f);
+	$b1 = 129;//0x80 | (0x1 & 0x0f);
 	$length = strlen($text);
 	
 	if($length <= 125)
@@ -33,25 +37,15 @@ function ws_mask($text)
 	elseif($length > 125 && $length < 65536)
 		$header = pack('CCn', $b1, 126, $length);
 	elseif($length >= 65536)
-		$header = pack('CCNN', $b1, 127, $length);
+		$header = pack('CCNN', $b1, 127, $length);	
 	return $header.$text;
 }
 
 //handshake new client.
-function ws_handshake($header, $cSoc, $host, $port)
+function ws_handshake(string $header, Socket $cSoc, string $host, int $port)
 {
-	$secKey = '';
-    $header = preg_replace("/ /", '', $header);
-    $header = explode("\r\n", $header);
-    foreach($header as $v){
-        $line = explode(':', $v);
-        if(chop($line[0]) === 'Sec-WebSocket-Key'){
-            $secKey = chop($line[1]);
-            break;
-        }
-    }
-    $secAccept = base64_encode(pack('H*', sha1($secKey.'258EAFA5-E914-47DA-95CA-C5AB0DC85B11')));    
-    
+	$secKey = substr($header, strpos($header, 'Sec-WebSocket-Key: ')+19, 24);	
+	$secAccept = base64_encode(pack('H*', sha1($secKey.'258EAFA5-E914-47DA-95CA-C5AB0DC85B11')));
 	//hand shaking header
 	$upgrade  = "HTTP/1.1 101 Web Socket Protocol Handshake\r\n".
 	"Upgrade: websocket\r\n".
@@ -62,42 +56,32 @@ function ws_handshake($header, $cSoc, $host, $port)
 	socket_write($cSoc,$upgrade,strlen($upgrade));
 }
 
-function ws_write(&$cSoc, array &$msg){
-    $t = ws_mask(json_encode($msg));
+function ws_write(Socket &$cSoc, array &$msg){
+    $t = ws_mask(json_encode($msg));	
     return socket_write($cSoc, $t, strlen($t));
 }
 
 function ws_read(&$msg){
     $msg = json_decode(ws_unmask($msg), true);
-}
-
-function getPort(&$sock){
-		$null = null;
-		$port = 0;
-		@socket_getpeername($sock, $null, $port);
-		return $port;
+	$msg = ws_unmask($msg);
 }
 
 
-$ip = '192.168.0.50';
-$port = 8080;
 $null = null;
 $listening = socket_create(AF_INET, SOCK_STREAM, SOL_TCP) or die("Err in create()\r\n");
-socket_bind($listening, $ip, $port) or die("Err in bind()\r\n");
+socket_bind($listening, $IP_G, $PORT_G) or die("Err in bind()\r\n");
+socket_setopt($listening, SOL_SOCKET, SO_REUSEADDR, true) or die("Err in config()\r\n");
 socket_listen($listening, 4) or die("Err in listen()\r\n");
 
-$run = 1;
-$msg = ['user'=>'root','msg'=>'Welcome :)'];
+$run = true;
 $master = [$listening];
-$port = 0;
-$ip = '';
-socket_getsockname($listening, $null, $port); $null = null;
-$user[$port] = 'x';
+$null = null;
+$user[$PORT_G] = ['id'=>'root', 't_active'=>time(), 'room'=>'main'];
+$room['main'] = ['clients'=>['root'], 'password'=>'0'];
 
 while($run) // Main loop
 {
 	$userCpy = $master;
-	
 	if(socket_select($userCpy, $null, $null, 0) === false) continue;
 	
 	foreach($userCpy as $k=>$sock)
@@ -106,10 +90,15 @@ while($run) // Main loop
 		{
 			$newSock = socket_accept($listening);
 			socket_set_option ($newSock, SOL_SOCKET, SO_LINGER, ['l_onoff'=>1,'l_linger'=>0]);
-            $header = socket_read($newSock, 1024); //Initial handshake header
-            ws_handshake($header, $newSock, $ip, $port); //Handshake
-            if(ws_write($newSock, $msg) > 0){
-				$port = getPort($newSock);
+            $header = socket_read($newSock, 512); // Handshake request header
+            ws_handshake($header, $newSock, $IP_G, $PORT_G); // Handshake
+			$port = spl_object_id($newSock);
+			$msg = ['from'=>'root', 'type'=>'notify', 'id'=>$port];
+			$notify = ['from'=>'root', 'type'=>'notify', 'online'=>$port];
+			foreach($master as &$tmp)
+				if($tmp != $sock && $tmp != $newSock && $tmp != $listening)
+					ws_write($tmp, $notify);	
+			if(ws_write($newSock, $msg) > 0){
 				echo "Online: $port\r\n";
 				$master[] = $newSock;
 				$user[$port] = 'x';
@@ -120,61 +109,33 @@ while($run) // Main loop
 		$buff = null;
 		$bytesIn = socket_recv($sock, $buff, 4096, 0);
 		
-		if($bytesIn <= 0) // Client offline
+		if($bytesIn <= 6) // Client offline
 		{
-			$port = getPort($sock);
+			$port = spl_object_id($sock);
 			socket_close($sock);
 			unset($master[$k]);
 			unset($user[$port]);
 			echo "Offline: $port\r\n";
+			$notify = ['from'=>'root', 'type'=>'notify', 'offline'=>$port];
+			foreach($master as &$tmp)
+				if($tmp != $sock && $tmp != $listening)
+					ws_write($tmp, $notify);
 			continue;
         }
 		
 		ws_read($buff);		
-		
-		if(isset($buff['cmd'])) // Client command
-		{
-			$buff = $buff['cmd'];
-
-            if(isset($buff['name'])){
-				//TODO set new nick
-			}
-
-			elseif(isset($buff['room'])){
-				//TODO create chat room
-			}
-
-			elseif(isset($buff['call'])){
-				//TODO create call session
-			}
-			
-			continue;
-		}
-		
-		if(isset($buff['data'])) // Process data message
-		{
-			foreach($master	as $outSock) // Broadcast data as json
-				$port = getPort($outSock);
-				if($user[$port] != 'x') $port = $user[$port];
-				$msg = ['user'=>$port,'data'=>$buff['data']];
-				if($outSock != $listening && $outSock === $sock){
-					ws_write($outSock, $msg);
-			}
-			continue;
-		}
-
+		echo $msg.PHP_EOL;
+				
 		foreach($master	as $outSock) // Broadcast text message to all
 		{
 			if(!isset($buff['msg'])) continue;
 			if(strlen(chop($buff['msg'])) === 0) continue;
-			$port = getPort($outSock);
-			if($user[$port] != 'x') $port = $user[$port];
-			$msg = ['user'=>$port,'msg'=>$buff['msg']];
+			$port = spl_object_id($outSock);
+			$msg = ['from'=>"$port", 'type'=>'text', 'data'=>$buff['msg']];			
 			if($outSock != $listening && $outSock != $sock){
 				ws_write($outSock, $msg);
 			}
-		}
-		#echo "[{$msg['user']}]: {$msg['data']}\r\n";
+		}		
 	}
 	usleep(10000); // Sleep 10ms to avoid 100% core usage
 }
