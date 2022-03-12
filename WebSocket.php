@@ -101,7 +101,7 @@ while($run) // Main loop
 			if(ws_write($newSock, $msg) > 0){
 				echo "Online: $port\r\n";
 				$master[] = $newSock;
-				$user[$port] = 'x';
+				$user[$port] = ['id'=>'guest', 't_active'=>time(), 'room'=>'main'];
 			}
 			continue;
 		}
@@ -124,12 +124,14 @@ while($run) // Main loop
         }
 		
 		ws_read($buff);		
-		echo $msg.PHP_EOL;
+		//print_r($msg);
 				
 		foreach($master	as $outSock) // Broadcast text message to all
 		{
-			if(!isset($buff['msg'])) continue;
-			if(strlen(chop($buff['msg'])) === 0) continue;
+			if(!isset($buff['type']))   continue;
+			if($buff['type'] != 'text') continue;
+			if(!isset($buff['data']))   continue;
+			if(strlen(chop($buff['data'])) === 0) continue;
 			$port = spl_object_id($outSock);
 			$msg = ['from'=>"$port", 'type'=>'text', 'data'=>$buff['msg']];			
 			if($outSock != $listening && $outSock != $sock){
