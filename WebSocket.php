@@ -62,8 +62,7 @@ function ws_write(Socket &$cSoc, array &$msg){
 }
 
 function ws_read(&$msg){
-    $msg = json_decode(ws_unmask($msg), true);
-	$msg = ws_unmask($msg);
+    $msg = json_decode(ws_unmask($msg), true);	
 }
 
 
