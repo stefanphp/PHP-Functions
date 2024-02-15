@@ -1,7 +1,7 @@
 <?php
 
-class Indexer{
-
+#[AllowDynamicProperties]
+class Indexer{	
     public function __construct(string $path = '', string $dbname = '')
     {
         $this->db = new PDO("sqlite:$dbname");
@@ -45,13 +45,14 @@ class Indexer{
                 $this->removeDoubles();
                 $this->insertToDB();
                 $x = 0;
-                echo "\n--1000--(ok $this->f_ok:$this->f_err err)--$this->f_cnt\n";
+                echo "\r---(ok $this->f_ok:$this->f_err err)--$this->f_cnt---";
             }
-            $name  =  $file->getBasename();
-            $hash  =  md5_file($file);
-            $size  =  $file->getSize();
-            $ext   =  $file->getExtension();
-            $time  =  time();
+            $name  = $file->getBasename();
+			if($name === false){ printf("[ERR] > %s.\n", $file->getBasename()); continue; }
+            $hash  = hash_file('xxh3', $file);
+            $size  = $file->getSize();
+            $ext   = $file->getExtension();
+            $time  = time();
             $path  = $file->getPath();
             $ctime = $file->getCtime();
             $atime = $file->getAtime();
@@ -70,13 +71,13 @@ class Indexer{
     }
 
     private function removeDoubles()
-    {        
+    {
         $hash_cnt = $this->db->query('select count(_rowid_) from files')->fetchAll(PDO::FETCH_NUM)[0][0];
         if($hash_cnt === 0) return;
         $hash_rng = range(0, $hash_cnt+1000, 1000);
         foreach($hash_rng as $xkey=>$x)
         {
-            $hash_arr = $this->db->query("select hash from files limit 1000 offset $xkey")->fetchAll(PDO::FETCH_NUM);            
+            $hash_arr = $this->db->query("select hash from files limit 1000 offset $xkey")->fetchAll(PDO::FETCH_NUM);
             $this->files_arr = new ArrayObject($this->files_arr);
             $this->files_arr = $this->files_arr->getIterator();
             $hash_arr = new ArrayObject($hash_arr);
@@ -110,12 +111,59 @@ class Indexer{
             else if($res === false) $this->f_err++;
         }
         $this->files_arr = [];
+    }    
+}
+
+function clean($dir)
+{
+    $o   = 0;
+    $del = $err = $tmp = 0;
+    $db  = new PDO("sqlite:$dir");
+
+    $total = $db->query('select count(*) as total from files');
+    $total = $total->fetch(PDO::FETCH_NUM)[0];
+
+    $cmd = "select path || '\' || name as 'fullpath', hash from files limit 1000 offset $o";
+    $items = $db->query($cmd)->fetchAll(PDO::FETCH_NUM);
+
+    while(!empty($items) && $o < $total)
+    {
+        $ghost = [];     
+        
+        foreach($items as $i)
+            if(!file_exists($i[0])) {
+                array_push($ghost, "'{$i[1]}'");
+                $tmp++;
+            }
+
+        $o += 1000;
+        if(empty($ghost)) continue;
+                
+        $ghost = implode(',', $ghost);
+        if($db->exec("delete from files where hash in($ghost)")) $del += $tmp;
+        
+        $cmd = "select path || '\' || name as 'fullpath', hash from files limit 1000 offset $o";
+        $items = $db->query($cmd)->fetchAll(PDO::FETCH_NUM);
     }
+
+    if ($err === 0 && $del === 0) {
+        echo "\nNothing to clean.\n";
+        return;
+    }
+    
+    echo "\nRemoved $del files, erros: $err.\n";
 }
 
 if(sizeof($argv) !== 3) die("Usage: php $argv[0] path_to_dir path_to_db.\n");
+
+if($argv[1] === 'clean' && is_file($argv[2])) {
+    clean($argv[2]);
+    return 0;
+}
+
 $dir = $argv[1];
 $db  = $argv[2];
 if(!is_dir($dir))  die("Dir err: '$dir'\n");
-if(!is_file($db)) die("DB err: '$db'.\n");
+if(!file_exists($db)) { $f = fopen($db, 'wb'); fclose($f); }
+
 $index = new Indexer($dir, $db);
