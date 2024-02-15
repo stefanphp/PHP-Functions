@@ -35,12 +35,14 @@ class Indexer{
     {
         $this->deployDB();
         $x = 0;
+        $filter = ['m4a','opus','wav','flac','aac','mp3','mp4', 'mkv', '3gp', 'mov', 'webm', 'jpg', 'png', 'jpeg'];
         $dir = new RecursiveDirectoryIterator($dir, 4096 | 0);
         $it = new RecursiveIteratorIterator($dir, 1, 16);        
         
         foreach($it as $file)
         {
             if(!$file->isFile()) continue;
+            if(!in_array($file->getExtension(), $filter)) continue;
             if($x === 1000){
                 $this->removeDoubles();
                 $this->insertToDB();
@@ -72,7 +74,7 @@ class Indexer{
 
     private function removeDoubles()
     {
-        $hash_cnt = $this->db->query('select count(_rowid_) from files')->fetchAll(PDO::FETCH_NUM)[0][0];
+        $hash_cnt = $this->db->query('select count(*) from files')->fetchAll(PDO::FETCH_NUM)[0][0];
         if($hash_cnt === 0) return;
         $hash_rng = range(0, $hash_cnt+1000, 1000);
         foreach($hash_rng as $xkey=>$x)
@@ -121,14 +123,15 @@ function clean($dir)
     $db  = new PDO('sqlite:'.$dir);
 
     $total = $db->query('select count(*) as total from files');
-    $total = $total->fetch(PDO::FETCH_NUM)[0];
+    $total = $total->fetch(PDO::FETCH_NUM)[0]+1;
 
     $dsep = DIRECTORY_SEPARATOR;
-    $cmd = "select path || '$dsep' || name as 'fullpath', hash from files limit 2000 offset $o";
-    $items = $db->query($cmd)->fetchAll(PDO::FETCH_NUM);
     
-    while(!empty($items) && $o < $total)
+    while($o < $total)
     {
+        $cmd = "select path || '$dsep' || name as 'fullpath', hash from files limit 2000 offset $o";
+        $items = $db->query($cmd)->fetchAll(PDO::FETCH_NUM);
+        
         $ghost = [];
         $o += 2000;        
         
@@ -143,9 +146,6 @@ function clean($dir)
         $ghost = implode(',', $ghost);
         if($db->exec("delete from files where hash in($ghost)")) $del += $tmp;
         else $err++;
-        
-        $cmd = "select path || '$dsep' || name as 'fullpath', hash from files limit 2000 offset $o";
-        $items = $db->query($cmd)->fetchAll(PDO::FETCH_NUM);
     }
 
     if ($err === 0 && $del === 0) {
