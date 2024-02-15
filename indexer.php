@@ -37,7 +37,7 @@ class Indexer{
         $x = 0;
         $dir = new RecursiveDirectoryIterator($dir, 4096 | 0);
         $it = new RecursiveIteratorIterator($dir, 1, 16);        
-
+        
         foreach($it as $file)
         {
             if(!$file->isFile()) continue;
@@ -116,33 +116,35 @@ class Indexer{
 
 function clean($dir)
 {
-    $o   = 0;
-    $del = $err = $tmp = 0;
-    $db  = new PDO("sqlite:$dir");
+    if (!is_file($dir)) die("\nDB read err. -> $dir.\n");
+    $del = $err = $tmp = $o = 0;
+    $db  = new PDO('sqlite:'.$dir);
 
     $total = $db->query('select count(*) as total from files');
     $total = $total->fetch(PDO::FETCH_NUM)[0];
 
-    $cmd = "select path || '\' || name as 'fullpath', hash from files limit 1000 offset $o";
+    $dsep = DIRECTORY_SEPARATOR;
+    $cmd = "select path || '$dsep' || name as 'fullpath', hash from files limit 2000 offset $o";
     $items = $db->query($cmd)->fetchAll(PDO::FETCH_NUM);
-
+    
     while(!empty($items) && $o < $total)
     {
-        $ghost = [];     
+        $ghost = [];
+        $o += 2000;        
         
-        foreach($items as $i)
+        foreach($items as $i) {
             if(!file_exists($i[0])) {
                 array_push($ghost, "'{$i[1]}'");
                 $tmp++;
             }
+        }
 
-        $o += 1000;
         if(empty($ghost)) continue;
-                
         $ghost = implode(',', $ghost);
         if($db->exec("delete from files where hash in($ghost)")) $del += $tmp;
+        else $err++;
         
-        $cmd = "select path || '\' || name as 'fullpath', hash from files limit 1000 offset $o";
+        $cmd = "select path || '$dsep' || name as 'fullpath', hash from files limit 2000 offset $o";
         $items = $db->query($cmd)->fetchAll(PDO::FETCH_NUM);
     }
 
