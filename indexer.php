@@ -33,28 +33,35 @@ class Indexer{
 
     private function fast_xxh3($f)
     {
-        try 
-        {
-            $ichunk = 512000;
+	try 
+    	{
+            $ichunk = 8192*8;
             $f_sz = $f->getSize();
-    
-            $f_ctx = null;
-            $f_ctx = $f->openFile('rb', 0,  $f_ctx);
-            if(!$f_ctx) return 0;
-            $h_ctx = hash_init('xxh3');
-    
-            $buffer = $f_ctx->fread($ichunk);
-            if(!hash_update($h_ctx, $buffer)) return 0;
-    
-            $f_ctx->fseek($f, SEEK_CUR, (int)($f_sz/2));
-    
-            $buffer = $f_ctx->fread($ichunk);
-            if(!hash_update($h_ctx, $buffer)) return 0;
-    
-            $f_ctx->fclose();
-        }
-        catch(RuntimeException $err){}
-        finally { return hash_final($h_ctx); }
+            $seek = (int)($f_sz/2);
+	        
+	    $f_ctx = null;
+	    $f_ctx = $f->openFile('rb');
+	        
+	    if(!$f_ctx) return 0;
+	    $h_ctx = hash_init($algo);
+	
+	    $buffer = $f_ctx->fread($ichunk);
+	    if(!hash_update($h_ctx, $buffer)) return 0;
+	        
+	    $f_ctx->fseek($seek, SEEK_SET);
+	        
+	    $buffer = $f_ctx->fread($ichunk);
+	    if(!hash_update($h_ctx, $buffer)) return 0;
+	
+	    $f_ctx->fseek($f_sz - $ichunk, SEEK_SET);
+	        
+	    $buffer = $f_ctx->fread($ichunk);
+	    if(!hash_update($h_ctx, $buffer)) return 0;
+	        
+	    $f_ctx->fclose();
+    	}
+    	catch(RuntimeException $err){}
+    	finally { return hash_final($h_ctx); }
     }
 
     private function indexFiles($dir)
